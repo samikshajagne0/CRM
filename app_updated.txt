@@ -1,0 +1,214 @@
+// ============================================================
+// ASTURA GLOBAL CRM — APP SHELL (with auth)
+// Replace the existing App.jsx with this file.
+// All CRM module components remain exactly as before.
+// ============================================================
+import { useState, useEffect, useCallback } from 'react';
+import LoginPage from './auth/LoginPage';
+import { getStoredUser, clearAuth } from './auth/useAuth';
+import AdminPanel from './admin/AdminPanel';
+
+// Import all your existing module components here:
+// import Dashboard from './modules/Dashboard';
+// import Opportunities from './modules/Opportunities';
+// etc.
+// For a single-file setup, keep all components in App.jsx
+// and just add this shell logic at the top.
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+
+// ── Authenticated API helper ──────────────────────────────────
+function makeApi(token) {
+  return async (path, opts = {}) => {
+    const r = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...opts,
+    });
+    if (r.status === 401) {
+      clearAuth();
+      window.location.reload();
+      return;
+    }
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  };
+}
+
+// ── LOV hook — replaces hardcoded arrays ──────────────────────
+export function useLov(api) {
+  const [lovs, setLovs] = useState({});
+  const fetchLov = useCallback(async (category) => {
+    if (lovs[category]) return;
+    try {
+      const vals = await api(`/lov/${category}`);
+      setLovs(prev => ({ ...prev, [category]: vals }));
+    } catch (e) { console.error('LOV fetch failed:', category, e); }
+  }, [lovs, api]);
+  const get = (category, fallback = []) => lovs[category] || fallback;
+  return { fetchLov, get, lovs };
+}
+
+// ── Nav definition ────────────────────────────────────────────
+const NAV_SALES = [
+  { key:'dashboard',    label:'Dashboard',         icon:'▣' },
+  { key:'opportunities',label:'Opportunities',      icon:'◈' },
+  { key:'accounts',     label:'Accounts',           icon:'⬡' },
+  { key:'contacts',     label:'Contacts',           icon:'◉' },
+  { key:'projects',     label:'Projects',           icon:'▤' },
+  { key:'invoices',     label:'Invoices',           icon:'▧' },
+  { key:'collections',  label:'Collections',        icon:'💰' },
+  { key:'activities',   label:'Activities',         icon:'◷' },
+  { key:'tasks',        label:'Tasks',              icon:'✓' },
+  { key:'quarterly',    label:'Quarterly',          icon:'▦' },
+];
+
+const NAV_ADMIN_EXTRA = [
+  { key:'admin', label:'Admin Panel', icon:'⚙' },
+];
+
+// ── User Avatar ───────────────────────────────────────────────
+function UserAvatar({ user, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const initials = user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  return (
+    <div style={{ position:'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ width:36, height:36, borderRadius:18, background:'rgba(59,130,246,0.2)', color:'#93c5fd', border:'none', fontSize:13, fontWeight:500, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}
+      >{initials}</button>
+      {open && (
+        <div style={{ position:'absolute', bottom:44, left:0, background:'#fff', border:'1px solid #e8eaf0', borderRadius:12, padding:8, width:180, boxShadow:'0 4px 20px rgba(0,0,0,0.1)', zIndex:100 }}>
+          <p style={{ fontSize:13, fontWeight:500, margin:'4px 8px 2px', color:'#1a1f2e' }}>{user.name}</p>
+          <p style={{ fontSize:11, color:'#9ca3af', margin:'0 8px 8px' }}>{user.email}</p>
+          <p style={{ fontSize:11, color:'#6b7280', margin:'0 8px 8px', background:'#f3f4f6', borderRadius:6, padding:'3px 8px', display:'inline-block' }}>{user.role}</p>
+          <hr style={{ border:'none', borderTop:'1px solid #f1f5f9', margin:'4px 0' }} />
+          <button onClick={onLogout} style={{ width:'100%', textAlign:'left', padding:'8px', fontSize:13, color:'#991b1b', background:'none', border:'none', cursor:'pointer', borderRadius:8 }}>
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── App Shell ─────────────────────────────────────────────────
+export default function App() {
+  const [user, setUser]   = useState(getStoredUser);
+  const [token, setToken] = useState(() => localStorage.getItem('crm_token'));
+  const [page, setPage]   = useState('dashboard');
+
+  const api = makeApi(token);
+
+  // Shared data loaded once after login
+  const [users, setUsers]       = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [contacts, setContacts] = useState([]);
+
+  const { fetchLov, get: getLov } = useLov(api);
+
+  useEffect(() => {
+    if (!user) return;
+    // Load shared reference data
+    api('/users').then(setUsers).catch(console.error);
+    api('/accounts').then(setAccounts).catch(console.error);
+    api('/contacts').then(setContacts).catch(console.error);
+    // Pre-fetch common LOVs
+    ['opportunity_stage','lead_source','industry','account_type','activity_type',
+     'task_priority','task_status','invoice_status','payment_mode','project_status',
+     'project_health','entity','collection_status','escalation_level',
+     'payment_schedule_status','currency'].forEach(fetchLov);
+  }, [user]);
+
+  const handleLogin = (u, t) => {
+    setUser(u);
+    setToken(t);
+  };
+
+  const handleLogout = async () => {
+    try { await api('/auth/logout', { method:'POST' }); } catch {}
+    clearAuth();
+    setUser(null);
+    setToken(null);
+    setPage('dashboard');
+  };
+
+  // Not logged in → show login
+  if (!user || !token) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  const nav = user.role === 'admin'
+    ? [...NAV_SALES, ...NAV_ADMIN_EXTRA]
+    : NAV_SALES;
+
+  // ── Page renderer ───────────────────────────────────────────
+  // Pass `api` and LOV getter to every module component.
+  // Replace these placeholders with your actual component imports.
+  //
+  // Example usage in a module:
+  //   const stages = getLov('opportunity_stage', STAGES_FALLBACK);
+  //
+  // This means dropdowns are always live from the DB,
+  // with a hardcoded fallback if the fetch hasn't resolved yet.
+
+  const commonProps = { api, users, accounts, contacts, getLov };
+
+  const pages = {
+    dashboard:     <Dashboard     {...commonProps} />,
+    opportunities: <Opportunities {...commonProps} />,
+    accounts:      <Accounts      {...commonProps} />,
+    contacts:      <Contacts      {...commonProps} />,
+    projects:      <Projects      {...commonProps} />,
+    invoices:      <Invoices      {...commonProps} />,
+    collections:   <Collections   {...commonProps} />,
+    activities:    <Activities    {...commonProps} />,
+    tasks:         <Tasks         {...commonProps} />,
+    quarterly:     <QuarterlyTracking {...commonProps} />,
+    admin:         user.role === 'admin'
+                     ? <AdminPanel api={api} currentUser={user} />
+                     : <div style={{ padding:40, color:'#9ca3af' }}>Access denied.</div>,
+  };
+
+  return (
+    <div style={{ display:'flex', height:'100vh', fontFamily:'system-ui,-apple-system,sans-serif', background:'#f5f6fa', overflow:'hidden' }}>
+      {/* Sidebar */}
+      <aside style={{ width:200, background:'#1a1f2e', display:'flex', flexDirection:'column', flexShrink:0 }}>
+        <div style={{ padding:'20px 18px 16px', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>
+          <p style={{ fontSize:10, color:'rgba(255,255,255,0.35)', margin:'0 0 2px', textTransform:'uppercase', letterSpacing:'0.1em' }}>Astura Global</p>
+          <p style={{ fontSize:15, fontWeight:500, color:'#fff', margin:0 }}>CRM</p>
+        </div>
+        <nav style={{ flex:1, paddingTop:10, overflowY:'auto' }}>
+          {nav.map(n => (
+            <button key={n.key} onClick={() => setPage(n.key)} style={{
+              width:'100%', display:'flex', alignItems:'center', gap:10, padding:'9px 18px',
+              background: page===n.key ? 'rgba(59,130,246,0.18)' : 'transparent',
+              border: 'none',
+              borderLeft: page===n.key ? '3px solid #3b82f6' : '3px solid transparent',
+              color: page===n.key ? '#fff' : '#8b92a5',
+              fontSize:13, cursor:'pointer', textAlign:'left', transition:'all 0.15s',
+            }}>
+              <span style={{ fontSize:14, opacity:0.8 }}>{n.icon}</span>
+              <span>{n.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div style={{ padding:'12px 18px', borderTop:'1px solid rgba(255,255,255,0.07)', display:'flex', alignItems:'center', gap:10 }}>
+          <UserAvatar user={user} onLogout={handleLogout} />
+          <div style={{ minWidth:0 }}>
+            <p style={{ fontSize:12, color:'rgba(255,255,255,0.7)', margin:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user.name}</p>
+            <p style={{ fontSize:10, color:'rgba(255,255,255,0.3)', margin:0 }}>{user.role}</p>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main style={{ flex:1, overflowY:'auto', padding:'24px 28px' }}>
+        {pages[page] || <div style={{ color:'#9ca3af' }}>Page not found</div>}
+      </main>
+    </div>
+  );
+}

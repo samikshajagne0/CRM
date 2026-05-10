@@ -1,0 +1,213 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design Tokens ─────────────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  /* Sidebar */
+  --color-sidebar-bg: #0f1117;
+  --color-sidebar-active: rgba(99, 102, 241, 0.15);
+  --color-sidebar-active-border: #6366f1;
+  --color-sidebar-border: rgba(255, 255, 255, 0.06);
+  --color-sidebar-text: #8b8fa8;
+  --color-sidebar-text-hover: #e2e4ed;
+  --color-sidebar-icon: #525870;
+
+  /* Surface */
+  --color-bg: #f4f5f9;
+  --color-surface: #ffffff;
+  --color-border: #e4e6ef;
+  --color-border-light: #f1f3f9;
+
+  /* Text */
+  --color-text-primary: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+
+  /* Brand accent */
+  --color-blue: #6366f1;
+  --color-blue-hover: #4f46e5;
+  --color-blue-bg: #eef2ff;
+  --color-blue-border: #c7d2fe;
+  --color-blue-dark: #3730a3;
+
+  /* Status */
+  --color-green: #10b981;
+  --color-green-bg: #d1fae5;
+  --color-green-text: #065f46;
+  --color-red: #ef4444;
+  --color-red-bg: #fee2e2;
+  --color-red-text: #991b1b;
+  --color-yellow-bg: #fef9c3;
+  --color-yellow-text: #854d0e;
+  --color-purple-bg: #ede9fe;
+  --color-purple-text: #5b21b6;
+  --color-orange-bg: #ffedd5;
+  --color-orange-text: #9a3412;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.12);
+}
+
+/* ── Base ──────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* ── Sidebar scrollbar invisible ──────────────────────────── */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 0;
+}
+
+/* ── Animations ────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.25s ease-out;
+}
+
+/* ── Mobile overlay ─────────────────────────────────────────── */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 30;
+  backdrop-filter: blur(2px);
+}
+
+/* ── Pulse skeleton ─────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ── ULTIMATE SELECT / OPTION VISIBILITY FIX ────────────────── */
+/* Native browser dropdown lists (popups) are notoriously hard to style. */
+/* We force pure black text and white backgrounds at every level.         */
+
+html,
+:root {
+  color-scheme: light !important;
+}
+
+input,
+textarea,
+select {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+  -webkit-text-fill-color: #000000 !important;
+  color-scheme: light !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  line-height: normal !important;
+}
+
+/* Force standard OS rendering for dropdown lists */
+select {
+  -webkit-appearance: menulist !important;
+  -moz-appearance: menulist !important;
+  appearance: menulist !important;
+  cursor: pointer;
+}
+
+/* The actual items inside the dropdown */
+option {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  -webkit-text-fill-color: #000000 !important;
+  display: block !important;
+  min-height: 1.2em !important;
+}
+
+/* Placeholder/Muted options */
+select option[value=""],
+select option:disabled {
+  color: #6b7280 !important;
+  -webkit-text-fill-color: #6b7280 !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #6b7280 !important;
+  -webkit-text-fill-color: #6b7280 !important;
+}

@@ -1,0 +1,550 @@
+// ============================================================
+// FILE: frontend/src/auth/LoginPage.jsx
+// OTP-based login flow
+// ============================================================
+import { useState } from 'react';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+
+async function apiPost(path, body) {
+  const r = await fetch(`${API}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+export default function LoginPage({ onLogin }) {
+  const [step, setStep]       = useState('email'); // 'email' | 'otp'
+  const [email, setEmail]     = useState('');
+  const [otp, setOtp]         = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+  const [info, setInfo]       = useState('');
+
+  const requestOTP = async e => {
+    e.preventDefault();
+    setError(''); setInfo(''); setLoading(true);
+    try {
+      await apiPost('/auth/request-otp', { email });
+      setStep('otp');
+      setInfo(`A 6-digit code has been sent to ${email}`);
+    } catch (err) {
+      setError(err.message);
+    } finally { setLoading(false); }
+  };
+
+  const verifyOTP = async e => {
+    e.preventDefault();
+    setError(''); setLoading(true);
+    try {
+      const data = await apiPost('/auth/verify-otp', { email, otp });
+      localStorage.setItem('crm_token', data.token);
+      localStorage.setItem('crm_user', JSON.stringify(data.user));
+      onLogin(data.user, data.token);
+    } catch (err) {
+      setError(err.message);
+    } finally { setLoading(false); }
+  };
+
+  const s = {
+    wrap: { minHeight:'100vh', background:'#f5f6fa', display:'flex', alignItems:'center', justifyContent:'center', padding:20 },
+    card: { background:'#fff', borderRadius:20, border:'1px solid #e8eaf0', padding:'40px 36px', width:'100%', maxWidth:420 },
+    brand: { marginBottom:32 },
+    brandSub: { fontSize:11, color:'#9ca3af', margin:'0 0 4px', textTransform:'uppercase', letterSpacing:'0.1em' },
+    brandTitle: { fontSize:24, fontWeight:500, margin:0, color:'#1a1f2e' },
+    label: { display:'block', fontSize:12, fontWeight:500, color:'#6b7280', marginBottom:6 },
+    input: { width:'100%', border:'1px solid #e8eaf0', borderRadius:10, padding:'11px 14px', fontSize:14, color:'#1a1f2e', outline:'none', boxSizing:'border-box', marginBottom:16 },
+    btn: { width:'100%', background:'#3b82f6', color:'#fff', border:'none', borderRadius:10, padding:'12px', fontSize:14, fontWeight:500, cursor:'pointer' },
+    btnDisabled: { opacity:0.6, cursor:'not-allowed' },
+    error: { background:'#fff1f2', border:'1px solid #fecdd3', borderRadius:8, padding:'10px 14px', fontSize:13, color:'#991b1b', marginBottom:16 },
+    info: { background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:8, padding:'10px 14px', fontSize:13, color:'#1e40af', marginBottom:16 },
+    back: { background:'none', border:'none', color:'#6b7280', fontSize:13, cursor:'pointer', marginTop:12, textDecoration:'underline' },
+    otpInput: { width:'100%', border:'1px solid #e8eaf0', borderRadius:10, padding:'14px', fontSize:28, fontWeight:500, color:'#1a1f2e', letterSpacing:10, textAlign:'center', outline:'none', boxSizing:'border-box', marginBottom:16, fontFamily:'monospace' },
+  };
+
+  return (
+    <div style={s.wrap}>
+      <div style={s.card}>
+        <div style={s.brand}>
+          <p style={s.brandSub}>Astura Global</p>
+          <p style={s.brandTitle}>CRM Login</p>
+        </div>
+
+        {error && <div style={s.error}>{error}</div>}
+        {info  && <div style={s.info}>{info}</div>}
+
+        {step === 'email' ? (
+          <form onSubmit={requestOTP}>
+            <label style={s.label}>Work email address</label>
+            <input
+              style={s.input}
+              type="email"
+              placeholder="you@asturaglobal.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              autoFocus
+            />
+            <button style={{ ...s.btn, ...(loading ? s.btnDisabled : {}) }} disabled={loading}>
+              {loading ? 'Sending code…' : 'Send login code →'}
+            </button>
+            <p style={{ fontSize:12, color:'#9ca3af', marginTop:16, textAlign:'center' }}>
+              We'll email you a 6-digit code. No password needed.
+            </p>
+          </form>
+        ) : (
+          <form onSubmit={verifyOTP}>
+            <label style={s.label}>Enter your 6-digit code</label>
+            <input
+              style={s.otpInput}
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="──────"
+              value={otp}
+              onChange={e => setOtp(e.target.value.replace(/\D/g,''))}
+              required
+              autoFocus
+            />
+            <button style={{ ...s.btn, ...(loading ? s.btnDisabled : {}) }} disabled={loading || otp.length < 6}>
+              {loading ? 'Verifying…' : 'Sign in'}
+            </button>
+            <div style={{ textAlign:'center' }}>
+              <button type="button" style={s.back} onClick={() => { setStep('email'); setOtp(''); setError(''); setInfo(''); }}>
+                ← Use a different email
+              </button>
+            </div>
+            <p style={{ fontSize:12, color:'#9ca3af', marginTop:12, textAlign:'center' }}>
+              Code expires in 10 minutes. Check your spam folder if needed.
+            </p>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ============================================================
+// FILE: frontend/src/auth/useAuth.js
+// Auth state + API helper with token injection
+// ============================================================
+
+export function useAuthApi() {
+  const token = localStorage.getItem('crm_token');
+  return async (path, opts = {}) => {
+    const r = await fetch(
+      `${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}${path}`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        ...opts,
+      }
+    );
+    if (r.status === 401) {
+      localStorage.removeItem('crm_token');
+      localStorage.removeItem('crm_user');
+      window.location.reload();
+    }
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  };
+}
+
+export function getStoredUser() {
+  try { return JSON.parse(localStorage.getItem('crm_user')); }
+  catch { return null; }
+}
+
+export function clearAuth() {
+  localStorage.removeItem('crm_token');
+  localStorage.removeItem('crm_user');
+}
+
+
+// ============================================================
+// FILE: frontend/src/admin/AdminPanel.jsx
+// Admin panel: Users, LOV config, Audit log
+// ============================================================
+import { useState, useEffect, useCallback } from 'react';
+
+const ROLES    = ['sales', 'manager', 'admin'];
+const ENTITIES = ['Astura Global Pvt Ltd', 'Headwy', 'Intelezen', 'Other'];
+
+const LOV_CATEGORIES = [
+  { key:'opportunity_stage',        label:'Opportunity Stages' },
+  { key:'lead_source',              label:'Lead Sources' },
+  { key:'industry',                 label:'Industries' },
+  { key:'account_type',             label:'Account Types' },
+  { key:'activity_type',            label:'Activity Types' },
+  { key:'task_priority',            label:'Task Priorities' },
+  { key:'task_status',              label:'Task Statuses' },
+  { key:'invoice_status',           label:'Invoice Statuses' },
+  { key:'payment_mode',             label:'Payment Modes' },
+  { key:'project_status',           label:'Project Statuses' },
+  { key:'project_health',           label:'Project Health' },
+  { key:'entity',                   label:'Entities' },
+  { key:'collection_status',        label:'Collection Statuses' },
+  { key:'escalation_level',         label:'Escalation Levels' },
+  { key:'payment_schedule_status',  label:'Payment Schedule Statuses' },
+  { key:'currency',                 label:'Currencies' },
+];
+
+const inp = { width:'100%', border:'1px solid #e8eaf0', borderRadius:8, padding:'8px 12px', fontSize:13, boxSizing:'border-box', outline:'none' };
+const sel = { ...inp, background:'#fff', cursor:'pointer' };
+
+function AdminCard({ title, children }) {
+  return (
+    <div style={{ background:'#fff', border:'1px solid #e8eaf0', borderRadius:14, padding:20, marginBottom:20 }}>
+      <p style={{ fontSize:14, fontWeight:500, margin:'0 0 16px', color:'#1a1f2e' }}>{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function Btn({ onClick, children, danger, small, disabled }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        background: danger ? '#fee2e2' : '#eff6ff',
+        color: danger ? '#991b1b' : '#1e40af',
+        border: `1px solid ${danger ? '#fecdd3' : '#bfdbfe'}`,
+        borderRadius: 7,
+        padding: small ? '4px 10px' : '7px 14px',
+        fontSize: small ? 11 : 13,
+        fontWeight: 500,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+export default function AdminPanel({ api, currentUser }) {
+  const [tab, setTab] = useState('stats');
+
+  const tabs = [
+    { k:'stats',  label:'Overview' },
+    { k:'users',  label:'Users' },
+    { k:'lov',    label:'System Config' },
+    { k:'audit',  label:'Audit Log' },
+  ];
+
+  return (
+    <div>
+      <p style={{ fontSize:20, fontWeight:500, margin:'0 0 20px', color:'#1a1f2e' }}>Admin Panel</p>
+      <div style={{ display:'flex', gap:8, marginBottom:20, borderBottom:'1px solid #e8eaf0', paddingBottom:12 }}>
+        {tabs.map(t => (
+          <button key={t.k} onClick={() => setTab(t.k)} style={{
+            background: tab===t.k ? '#3b82f6' : 'transparent',
+            color: tab===t.k ? '#fff' : '#6b7280',
+            border: tab===t.k ? 'none' : '1px solid #e8eaf0',
+            borderRadius:8, padding:'7px 16px', fontSize:13, fontWeight:500, cursor:'pointer'
+          }}>{t.label}</button>
+        ))}
+      </div>
+      {tab==='stats'  && <AdminStats api={api} />}
+      {tab==='users'  && <UserManagement api={api} currentUser={currentUser} />}
+      {tab==='lov'    && <LovConfig api={api} />}
+      {tab==='audit'  && <AuditLog api={api} />}
+    </div>
+  );
+}
+
+// ── Stats ─────────────────────────────────────────────────────
+function AdminStats({ api }) {
+  const [stats, setStats] = useState(null);
+  useEffect(() => { api('/admin/stats').then(setStats).catch(console.error); }, []);
+  if (!stats) return <div style={{ color:'#9ca3af', fontSize:13 }}>Loading…</div>;
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:14 }}>
+      {[
+        ['Total Users', stats.users.total, '#eff6ff', '#1e40af'],
+        ['Active Users', stats.users.active, '#f0fdf4', '#15803d'],
+        ['Active Sessions', stats.activeSessions, '#faf5ff', '#7e22ce'],
+        ['LOV Values', stats.activeLovValues, '#fff7ed', '#9a3412'],
+      ].map(([l,v,bg,c]) => (
+        <div key={l} style={{ background:bg, borderRadius:12, padding:'16px 18px' }}>
+          <p style={{ fontSize:11, color:c, margin:'0 0 6px', textTransform:'uppercase', letterSpacing:'0.08em', fontWeight:500 }}>{l}</p>
+          <p style={{ fontSize:28, fontWeight:500, color:c, margin:0 }}>{v}</p>
+        </div>
+      ))}
+      <div style={{ gridColumn:'1/-1', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:12, padding:'14px 18px' }}>
+        <p style={{ fontSize:13, color:'#92400e', margin:0 }}>
+          Audit events in last 24h: <b>{stats.auditLast24h}</b>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── User Management ───────────────────────────────────────────
+function UserManagement({ api, currentUser }) {
+  const [users, setUsers] = useState([]);
+  const [modal, setModal] = useState(null);
+  const [f, setF] = useState({ name:'', email:'', role:'sales', entity:'Astura Global Pvt Ltd', active:true });
+  const [err, setErr] = useState('');
+  const load = () => api('/admin/users').then(setUsers).catch(console.error);
+  useEffect(() => { load(); }, []);
+
+  const openModal = u => {
+    setF(u ? { name:u.name, email:u.email, role:u.role, entity:u.entity||'Astura Global Pvt Ltd', active:u.active } : { name:'', email:'', role:'sales', entity:'Astura Global Pvt Ltd', active:true });
+    setModal(u || {});
+    setErr('');
+  };
+
+  const save = async () => {
+    setErr('');
+    try {
+      if (modal.id) await api(`/admin/users/${modal.id}`, { method:'PUT', body:JSON.stringify(f) });
+      else await api('/admin/users', { method:'POST', body:JSON.stringify(f) });
+      setModal(null); load();
+    } catch (e) { setErr(e.message); }
+  };
+
+  const deactivate = async u => {
+    if (!confirm(`Deactivate ${u.name}? They will be logged out immediately.`)) return;
+    try { await api(`/admin/users/${u.id}`, { method:'DELETE' }); load(); }
+    catch (e) { alert(e.message); }
+  };
+
+  const resetSessions = async u => {
+    if (!confirm(`Force ${u.name} to re-login?`)) return;
+    try { await api(`/admin/users/${u.id}/reset`, { method:'POST' }); alert('Sessions cleared.'); }
+    catch (e) { alert(e.message); }
+  };
+
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : 'Never';
+  const s = k => e => setF(p => ({ ...p, [k]: e.target.value }));
+
+  return (
+    <AdminCard title={`Users (${users.length})`}>
+      <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:14 }}>
+        <Btn onClick={() => openModal(null)}>+ Add User</Btn>
+      </div>
+      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+        <thead>
+          <tr style={{ background:'#f8f9fc' }}>
+            {['Name','Email','Role','Entity','Status','Last Login','Actions'].map(h => (
+              <th key={h} style={{ padding:'9px 12px', textAlign:'left', fontSize:11, fontWeight:500, color:'#6b7280', textTransform:'uppercase', letterSpacing:'0.05em', borderBottom:'1px solid #e8eaf0' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {users.map(u => (
+            <tr key={u.id} style={{ borderBottom:'1px solid #f1f5f9' }}>
+              <td style={{ padding:'10px 12px', fontWeight:500 }}>{u.name}{u.id===currentUser.id && <span style={{ fontSize:10, color:'#3b82f6', marginLeft:6 }}>(you)</span>}</td>
+              <td style={{ padding:'10px 12px', color:'#6b7280' }}>{u.email}</td>
+              <td style={{ padding:'10px 12px' }}>
+                <span style={{ background: u.role==='admin'?'#ede9fe': u.role==='manager'?'#dbeafe':'#f3f4f6', color: u.role==='admin'?'#5b21b6': u.role==='manager'?'#1e40af':'#374151', padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:500 }}>{u.role}</span>
+              </td>
+              <td style={{ padding:'10px 12px', color:'#6b7280', fontSize:12 }}>{u.entity}</td>
+              <td style={{ padding:'10px 12px' }}>
+                <span style={{ background:u.active?'#d1fae5':'#fee2e2', color:u.active?'#065f46':'#991b1b', padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:500 }}>{u.active?'Active':'Inactive'}</span>
+              </td>
+              <td style={{ padding:'10px 12px', color:'#9ca3af', fontSize:11 }}>{fmtDate(u.last_login)}</td>
+              <td style={{ padding:'10px 12px' }}>
+                <div style={{ display:'flex', gap:6 }}>
+                  <Btn small onClick={() => openModal(u)}>Edit</Btn>
+                  <Btn small onClick={() => resetSessions(u)}>Reset</Btn>
+                  {u.id !== currentUser.id && u.active && <Btn small danger onClick={() => deactivate(u)}>Deactivate</Btn>}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {modal && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.35)', zIndex:50, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+          <div style={{ background:'#fff', borderRadius:16, padding:28, width:'100%', maxWidth:440 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:20 }}>
+              <p style={{ fontSize:16, fontWeight:500, margin:0 }}>{modal.id ? 'Edit User' : 'New User'}</p>
+              <button onClick={() => setModal(null)} style={{ background:'none', border:'none', fontSize:20, color:'#9ca3af', cursor:'pointer' }}>✕</button>
+            </div>
+            {err && <div style={{ background:'#fff1f2', border:'1px solid #fecdd3', borderRadius:8, padding:'10px 14px', fontSize:13, color:'#991b1b', marginBottom:14 }}>{err}</div>}
+            <div style={{ display:'grid', gap:12 }}>
+              <div><label style={{ fontSize:12, color:'#6b7280', display:'block', marginBottom:4 }}>Full Name</label><input style={inp} value={f.name} onChange={s('name')} /></div>
+              <div><label style={{ fontSize:12, color:'#6b7280', display:'block', marginBottom:4 }}>Email Address</label><input type="email" style={inp} value={f.email} onChange={s('email')} /></div>
+              <div><label style={{ fontSize:12, color:'#6b7280', display:'block', marginBottom:4 }}>Role</label>
+                <select style={sel} value={f.role} onChange={s('role')}>{ROLES.map(r=><option key={r}>{r}</option>)}</select>
+              </div>
+              <div><label style={{ fontSize:12, color:'#6b7280', display:'block', marginBottom:4 }}>Entity</label>
+                <select style={sel} value={f.entity} onChange={s('entity')}>{ENTITIES.map(e=><option key={e}>{e}</option>)}</select>
+              </div>
+              {modal.id && (
+                <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                  <input type="checkbox" id="active-chk" checked={f.active} onChange={e=>setF(p=>({...p,active:e.target.checked}))} />
+                  <label htmlFor="active-chk" style={{ fontSize:13, color:'#374151' }}>Account active</label>
+                </div>
+              )}
+              <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:8 }}>
+                <button onClick={() => setModal(null)} style={{ border:'1px solid #e8eaf0', background:'#fff', borderRadius:8, padding:'8px 18px', fontSize:13, cursor:'pointer' }}>Cancel</button>
+                <button onClick={save} style={{ background:'#3b82f6', color:'#fff', border:'none', borderRadius:8, padding:'8px 18px', fontSize:13, fontWeight:500, cursor:'pointer' }}>Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </AdminCard>
+  );
+}
+
+// ── LOV Config ────────────────────────────────────────────────
+function LovConfig({ api }) {
+  const [activeCategory, setActiveCategory] = useState(LOV_CATEGORIES[0].key);
+  const [values, setValues] = useState([]);
+  const [newVal, setNewVal] = useState({ value:'', label:'', sort_order:0 });
+  const [editId, setEditId] = useState(null);
+  const [editLabel, setEditLabel] = useState('');
+
+  const load = useCallback(() => {
+    api(`/admin/lov/${activeCategory}`).then(setValues).catch(console.error);
+  }, [activeCategory]);
+  useEffect(() => { load(); setNewVal({ value:'', label:'', sort_order:0 }); setEditId(null); }, [load]);
+
+  const add = async () => {
+    if (!newVal.value) return;
+    try {
+      await api('/admin/lov', { method:'POST', body:JSON.stringify({ ...newVal, category:activeCategory }) });
+      setNewVal({ value:'', label:'', sort_order:0 }); load();
+    } catch (e) { alert(e.message); }
+  };
+
+  const save = async id => {
+    try {
+      await api(`/admin/lov/${id}`, { method:'PUT', body:JSON.stringify({ label:editLabel }) });
+      setEditId(null); load();
+    } catch (e) { alert(e.message); }
+  };
+
+  const toggle = async (id, active) => {
+    try {
+      await api(`/admin/lov/${id}`, { method:'PUT', body:JSON.stringify({ active:!active, label: values.find(v=>v.id===id)?.label }) });
+      load();
+    } catch (e) { alert(e.message); }
+  };
+
+  return (
+    <div style={{ display:'grid', gridTemplateColumns:'220px 1fr', gap:16 }}>
+      <div>
+        <p style={{ fontSize:12, fontWeight:500, color:'#6b7280', margin:'0 0 8px', textTransform:'uppercase', letterSpacing:'0.05em' }}>Categories</p>
+        {LOV_CATEGORIES.map(c => (
+          <button key={c.key} onClick={() => setActiveCategory(c.key)} style={{
+            display:'block', width:'100%', textAlign:'left', padding:'8px 12px', borderRadius:8, border:'none',
+            background: activeCategory===c.key ? '#eff6ff':'transparent',
+            color: activeCategory===c.key ? '#1e40af':'#374151',
+            fontSize:13, cursor:'pointer', marginBottom:3, fontWeight: activeCategory===c.key ? 500 : 400
+          }}>{c.label}</button>
+        ))}
+      </div>
+      <AdminCard title={LOV_CATEGORIES.find(c=>c.key===activeCategory)?.label}>
+        <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+          <input style={{ ...inp, flex:1 }} placeholder="Value (internal key)" value={newVal.value} onChange={e=>setNewVal(p=>({...p,value:e.target.value,label:e.target.value}))} />
+          <input style={{ ...inp, flex:1 }} placeholder="Label (display)" value={newVal.label} onChange={e=>setNewVal(p=>({...p,label:e.target.value}))} />
+          <input type="number" style={{ ...inp, width:70 }} placeholder="Order" value={newVal.sort_order} onChange={e=>setNewVal(p=>({...p,sort_order:Number(e.target.value)}))} />
+          <Btn onClick={add}>Add</Btn>
+        </div>
+        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+          <thead>
+            <tr style={{ background:'#f8f9fc' }}>
+              {['Order','Value','Label','Status','Actions'].map(h => (
+                <th key={h} style={{ padding:'8px 10px', textAlign:'left', fontSize:11, fontWeight:500, color:'#6b7280', textTransform:'uppercase', letterSpacing:'0.05em', borderBottom:'1px solid #e8eaf0' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {values.map(v => (
+              <tr key={v.id} style={{ borderBottom:'1px solid #f1f5f9', opacity:v.active?1:0.45 }}>
+                <td style={{ padding:'8px 10px', color:'#9ca3af' }}>{v.sort_order}</td>
+                <td style={{ padding:'8px 10px', fontFamily:'monospace', fontSize:12 }}>{v.value}</td>
+                <td style={{ padding:'8px 10px' }}>
+                  {editId===v.id
+                    ? <input style={{ ...inp, padding:'4px 8px' }} value={editLabel} onChange={e=>setEditLabel(e.target.value)} />
+                    : v.label
+                  }
+                </td>
+                <td style={{ padding:'8px 10px' }}>
+                  <span style={{ background:v.active?'#d1fae5':'#f3f4f6', color:v.active?'#065f46':'#6b7280', padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:500 }}>{v.active?'Active':'Inactive'}</span>
+                </td>
+                <td style={{ padding:'8px 10px' }}>
+                  <div style={{ display:'flex', gap:6 }}>
+                    {editId===v.id
+                      ? <><Btn small onClick={() => save(v.id)}>Save</Btn><Btn small onClick={() => setEditId(null)}>Cancel</Btn></>
+                      : <Btn small onClick={() => { setEditId(v.id); setEditLabel(v.label); }}>Edit</Btn>
+                    }
+                    <Btn small danger onClick={() => toggle(v.id, v.active)}>{v.active?'Disable':'Enable'}</Btn>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </AdminCard>
+    </div>
+  );
+}
+
+// ── Audit Log ─────────────────────────────────────────────────
+function AuditLog({ api }) {
+  const [rows, setRows] = useState([]);
+  const [filters, setFilters] = useState({ module:'', limit:50 });
+  const load = useCallback(() => {
+    const p = new URLSearchParams(Object.fromEntries(Object.entries(filters).filter(([,v])=>v)));
+    api(`/admin/audit?${p}`).then(setRows).catch(console.error);
+  }, [filters]);
+  useEffect(() => { load(); }, [load]);
+
+  const MODULES = ['accounts','contacts','opportunities','projects','invoices','tasks','activities','collections'];
+  const ACTION_COLORS = { CREATE:{ bg:'#d1fae5',c:'#065f46' }, UPDATE:{ bg:'#dbeafe',c:'#1e40af' }, DELETE:{ bg:'#fee2e2',c:'#991b1b' } };
+  const fmtDate = d => new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+
+  return (
+    <AdminCard title="Audit Log">
+      <div style={{ display:'flex', gap:10, marginBottom:14 }}>
+        <select style={{ ...sel, width:160 }} value={filters.module} onChange={e=>setFilters(p=>({...p,module:e.target.value}))}>
+          <option value="">All Modules</option>{MODULES.map(m=><option key={m}>{m}</option>)}
+        </select>
+        <select style={{ ...sel, width:120 }} value={filters.limit} onChange={e=>setFilters(p=>({...p,limit:e.target.value}))}>
+          {[25,50,100,200].map(n=><option key={n} value={n}>Last {n}</option>)}
+        </select>
+      </div>
+      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+        <thead>
+          <tr style={{ background:'#f8f9fc' }}>
+            {['Time','User','Action','Module','Record','IP'].map(h=>(
+              <th key={h} style={{ padding:'8px 10px', textAlign:'left', fontSize:11, fontWeight:500, color:'#6b7280', textTransform:'uppercase', letterSpacing:'0.05em', borderBottom:'1px solid #e8eaf0' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => {
+            const ac = ACTION_COLORS[r.action] || { bg:'#f3f4f6', c:'#374151' };
+            return (
+              <tr key={r.id} style={{ borderBottom:'1px solid #f1f5f9' }}>
+                <td style={{ padding:'8px 10px', fontSize:11, color:'#9ca3af', whiteSpace:'nowrap' }}>{fmtDate(r.created_at)}</td>
+                <td style={{ padding:'8px 10px', fontWeight:500 }}>{r.user_name}</td>
+                <td style={{ padding:'8px 10px' }}><span style={{ background:ac.bg, color:ac.c, padding:'2px 8px', borderRadius:20, fontSize:11, fontWeight:500 }}>{r.action}</span></td>
+                <td style={{ padding:'8px 10px', color:'#6b7280' }}>{r.module}</td>
+                <td style={{ padding:'8px 10px', maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{r.record_name || `#${r.record_id}`}</td>
+                <td style={{ padding:'8px 10px', fontSize:11, color:'#9ca3af', fontFamily:'monospace' }}>{r.ip_address}</td>
+              </tr>
+            );
+          })}
+          {!rows.length && <tr><td colSpan={6} style={{ padding:'24px', textAlign:'center', color:'#9ca3af' }}>No audit records found</td></tr>}
+        </tbody>
+      </table>
+    </AdminCard>
+  );
+}
