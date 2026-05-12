@@ -61,7 +61,7 @@ export default function Opportunities() {
       width: '40px',
       render: (opp) => (
         <button 
-          onClick={() => setExpandedId(expandedId === opp.id ? null : opp.id)}
+          onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === opp.id ? null : opp.id); }}
           className="text-gray-400 hover:text-indigo-600 transition-colors"
         >
           <svg className={`w-4 h-4 transform transition-transform ${expandedId === opp.id ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -75,7 +75,7 @@ export default function Opportunities() {
       label: 'Opportunity Name',
       render: (opp) => (
         <div className="flex flex-col">
-          <span className="font-medium text-[var(--color-text-primary)] hover:text-indigo-600 cursor-pointer" onClick={() => { setEditingOpp(opp); setIsDrawerOpen(true); }}>
+          <span className="font-medium text-[var(--color-text-primary)] hover:text-indigo-600 cursor-pointer">
             {opp.opportunity_name}
           </span>
           <span className="text-[11px] text-[var(--color-text-muted)]">{opp.account_name}</span>
@@ -104,7 +104,7 @@ export default function Opportunities() {
           <Badge label={formatLabel(opp?.stage)} />
           {nextStageMap[opp.stage] && (
             <button 
-              onClick={() => stageMutation.mutate({ id: opp.id, stage: nextStageMap[opp.stage] })}
+              onClick={(e) => { e.stopPropagation(); stageMutation.mutate({ id: opp.id, stage: nextStageMap[opp.stage] }); }}
               className="p-1 hover:bg-indigo-50 text-indigo-600 rounded-md transition-colors group relative"
               title={`Move to ${nextStageMap[opp.stage]}`}
             >
@@ -125,20 +125,29 @@ export default function Opportunities() {
       render: (opp) => <span className="text-[13px]">{opp.owner_name}</span>
     },
     { 
-      key: 'last_activity', 
-      label: 'Last Activity',
-      render: (opp) => (
-        <span className="text-[12px] text-[var(--color-text-muted)]">
-          {opp.last_activity ? formatDate(opp.last_activity) : 'No activity'}
-        </span>
-      )
-    },
-    { 
       key: 'close_date', 
       label: 'Exp. Close',
       render: (opp) => <span className="text-[12px] font-medium">{formatDate(opp?.expected_close)}</span>
+    },
+    {
+      key: 'actions',
+      label: '',
+      width: '80px',
+      render: (opp) => (
+        <button 
+          onClick={(e) => { e.stopPropagation(); setEditingOpp(opp); setIsDrawerOpen(true); }}
+          className="text-indigo-600 hover:text-indigo-900 font-medium text-[12px]"
+        >
+          Edit
+        </button>
+      )
     }
   ];
+
+  const handleEdit = (opp) => {
+    setEditingOpp(opp);
+    setIsDrawerOpen(true);
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -197,6 +206,7 @@ export default function Opportunities() {
           columns={columns}
           data={opportunities}
           loading={isLoading}
+          onRowClick={handleEdit}
           expandedRowRender={(opp) => <ActivityTimeline opportunityId={opp.id} />}
           expandedId={expandedId}
         />
