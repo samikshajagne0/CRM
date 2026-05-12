@@ -78,7 +78,7 @@ function UsersTab() {
   const queryClient = useQueryClient();
   const [showAdd, setShowAdd] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', role: 'sales', entity: 'Astura Global Pvt Ltd' });
+  const [form, setForm] = useState({ name: '', email: '', role: 'sales', entity: 'Astura Global Pvt Ltd', active: true });
   const [formError, setFormError] = useState('');
 
   const { data: users = [], isLoading } = useQuery({
@@ -105,7 +105,7 @@ function UsersTab() {
       queryClient.invalidateQueries(['admin', 'users']);
       setShowAdd(false);
       setEditingUser(null);
-      setForm({ name: '', email: '', role: 'sales', entity: 'Astura Global Pvt Ltd' });
+      setForm({ name: '', email: '', role: 'sales', entity: 'Astura Global Pvt Ltd', active: true });
       setFormError('');
     },
     onError: (e) => setFormError(e.response?.data?.error || 'Failed to save user'),
@@ -113,7 +113,7 @@ function UsersTab() {
 
   const handleEdit = (u) => {
     setEditingUser(u);
-    setForm({ name: u.name, email: u.email, role: u.role, entity: u.entity || '' });
+    setForm({ name: u.name, email: u.email, role: u.role, entity: u.entity || '', active: u.active });
     setShowAdd(true);
     setFormError('');
   };
@@ -184,6 +184,19 @@ function UsersTab() {
                 className="w-full border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[13px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
               />
             </div>
+            {editingUser && (
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-medium text-[var(--color-text-secondary)] mb-1">Account Status</label>
+                <select
+                  value={form.active ? 'true' : 'false'}
+                  onChange={e => setForm(p => ({ ...p, active: e.target.value === 'true' }))}
+                  className="w-full border border-[var(--color-border)] rounded-xl px-3 py-2.5 text-[13px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                >
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
+              </div>
+            )}
             <div className="sm:col-span-2 flex justify-end gap-3">
               {editingUser && (
                 <button
