@@ -3,13 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../lib/apiClient';
 import Button from '../../components/ui/Button';
 
-function FormField({ label, children }) {
+function FormField({ label, children, error }) {
   return (
     <div className="mb-4">
       <label className="block text-[12px] font-medium text-[var(--color-text-secondary)] mb-1.5 uppercase tracking-wider">
         {label}
       </label>
       {children}
+      {error && <div className="text-[10px] font-medium text-red-500 mt-1 animate-in fade-in slide-in-from-top-1">{error}</div>}
     </div>
   );
 }
@@ -44,35 +45,51 @@ export default function ContactForm({ onSuccess, onCancel, initialData }) {
     };
   });
 
+  const [errors, setErrors] = useState({});
+
   // Fetch Accounts for dropdown
   const { data: accounts = [] } = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => (await apiClient.get('/accounts')).data
   });
-
   const mutation = useMutation({
     mutationFn: (data) => {
-      // Prepare data for backend (combine names)
       const payload = {
         ...data,
         full_name: `${data.first_name} ${data.last_name}`.trim()
       };
-      
-      if (initialData?.id) {
-        return apiClient.put(`/contacts/${initialData.id}`, payload);
-      }
+      if (initialData?.id) return apiClient.put(`/contacts/${initialData.id}`, payload);
       return apiClient.post('/contacts', payload);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      onSuccess?.();
     }
   });
 
-  const handleSubmit = (e) => {
+  const validate = () => {
+    const e = {};
+    if (!form.first_name?.trim()) e.first_name = 'First name is required';
+    if (!form.last_name?.trim()) e.last_name = 'Last name is required';
+    if (!form.account_id) e.account_id = 'Please select an account';
+    if (!form.last_contact) e.last_contact = 'Date is required';
+    
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      e.email = 'Invalid format (e.g. user@domain.com)';
+    }
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.first_name || !form.last_name) return alert('First and Last names are required');
-    mutation.mutate(form);
+    if (!validate()) return;
+
+    try {
+      await mutation.mutateAsync(form);
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      alert('Contact saved successfully!');
+      onSuccess?.();
+    } catch (err) {
+      alert(`Error: ${err.response?.data?.error || err.message}`);
+    }
   };
 
   const handleChange = (e) => {
@@ -86,11 +103,11 @@ export default function ContactForm({ onSuccess, onCancel, initialData }) {
     <form onSubmit={handleSubmit} className="space-y-1">
       <div className="grid grid-cols-1 gap-1">
         <div className="grid grid-cols-2 gap-4">
-          <FormField label="First Name">
-            <input name="first_name" value={form.first_name} onChange={handleChange} className={inputClass} required />
+          <FormField label="First Name" error={errors.first_name}>
+            <input name="first_name" value={form.first_name} onChange={handleChange} className={`${inputClass} ${errors.first_name ? 'border-red-400' : ''}`} />
           </FormField>
-          <FormField label="Last Name">
-            <input name="last_name" value={form.last_name} onChange={handleChange} className={inputClass} required />
+          <FormField label="Last Name" error={errors.last_name}>
+            <input name="last_name" value={form.last_name} onChange={handleChange} className={`${inputClass} ${errors.last_name ? 'border-red-400' : ''}`} />
           </FormField>
         </div>
 
@@ -103,16 +120,16 @@ export default function ContactForm({ onSuccess, onCancel, initialData }) {
           </FormField>
         </div>
 
-        <FormField label="Account">
-          <select name="account_id" value={form.account_id} onChange={handleChange} className={inputClass} required>
+        <FormField label="Account" error={errors.account_id}>
+          <select name="account_id" value={form.account_id} onChange={handleChange} className={`${inputClass} ${errors.account_id ? 'border-red-400' : ''}`}>
             <option value="">Select Account</option>
             {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.account_name}</option>)}
           </select>
         </FormField>
 
         <div className="grid grid-cols-2 gap-4">
-          <FormField label="Email">
-            <input name="email" type="email" value={form.email} onChange={handleChange} className={inputClass} />
+          <FormField label="Email" error={errors.email}>
+            <input name="email" value={form.email} onChange={handleChange} className={`${inputClass} ${errors.email ? 'border-red-400' : ''}`} />
           </FormField>
           <FormField label="Mobile">
             <input name="mobile" value={form.mobile} onChange={handleChange} className={inputClass} />
@@ -123,8 +140,8 @@ export default function ContactForm({ onSuccess, onCancel, initialData }) {
           <FormField label="LinkedIn URL">
             <input name="linkedin" value={form.linkedin} onChange={handleChange} placeholder="linkedin.com/in/..." className={inputClass} />
           </FormField>
-          <FormField label="Last Contact Date">
-            <input name="last_contact" type="date" value={form.last_contact} onChange={handleChange} className={inputClass} />
+          <FormField label="Last Contact Date" error={errors.last_contact}>
+            <input name="last_contact" type="date" value={form.last_contact} onChange={handleChange} className={`${inputClass} ${errors.last_contact ? 'border-red-400' : ''}`} />
           </FormField>
         </div>
 

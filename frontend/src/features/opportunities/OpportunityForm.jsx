@@ -82,18 +82,39 @@ export default function OpportunityForm({ onSuccess, onCancel, initialData }) {
         return apiClient.put(`/opportunities/${initialData.id}`, data);
       }
       return apiClient.post('/opportunities', data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['opportunities'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      onSuccess?.();
     }
   });
 
-  const handleSubmit = (e) => {
+  const validateForm = () => {
+    if (!form.opportunity_name?.trim()) return 'Opportunity Name is required.';
+    if (!form.account_id) return 'Please select an Account.';
+    if (!form.owner_id) return 'Please select an Owner.';
+    if (!form.expected_close) return 'Expected Close date is required.';
+    
+    const val = parseFloat(form.value);
+    if (form.value && (isNaN(val) || val < 0)) return 'Value must be a positive number.';
+    
+    const prob = parseInt(form.probability);
+    if (isNaN(prob) || prob < 0 || prob > 100) return 'Probability must be between 0 and 100.';
+    
+    return null;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.opportunity_name || !form.account_id) return alert('Name and Account are required');
-    mutation.mutate(form);
+    
+    const error = validateForm();
+    if (error) return alert(error);
+
+    try {
+      await mutation.mutateAsync(form);
+      queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      alert(`Opportunity ${initialData?.id ? 'updated' : 'saved'} successfully!`);
+      onSuccess?.();
+    } catch (err) {
+      alert(`Error: ${err.response?.data?.error || err.message}`);
+    }
   };
 
   const handleChange = (e) => {

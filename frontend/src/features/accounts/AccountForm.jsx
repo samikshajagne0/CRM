@@ -71,10 +71,35 @@ export default function AccountForm({ onSuccess, onCancel, initialData }) {
     }
   });
 
-  const handleSubmit = (e) => {
+  const validateForm = () => {
+    if (!form.account_name?.trim()) {
+      alert('Account Name is required');
+      return false;
+    }
+
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      alert('Please enter a valid email address');
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.account_name) return alert('Account Name is required');
-    mutation.mutate(form);
+
+    if (!validateForm()) return;
+
+    try {
+      await mutation.mutateAsync(form);
+    } catch (error) {
+      console.error(error);
+
+      alert(
+        error?.response?.data?.message ||
+        'Failed to save account'
+      );
+    }
   };
 
   const handleChange = (e) => {
