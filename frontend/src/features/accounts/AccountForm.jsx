@@ -15,7 +15,7 @@ function FormField({ label, children, error }) {
         {label}
       </label>
       {children}
-      {error && <span className="text-[11px] text-red-500 mt-1">{error}</span>}
+      {error && <div className="text-[10px] font-medium text-red-500 mt-1 animate-fade-in">{error}</div>}
     </div>
   );
 }
@@ -60,6 +60,8 @@ export default function AccountForm({ onSuccess, onCancel, initialData }) {
   const { data: entities = [] } = useQuery({ queryKey: ['lov', 'entity'], queryFn: async () => (await apiClient.get('/lov/entity')).data });
   const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: async () => (await apiClient.get('/users')).data });
 
+  const [errors, setErrors] = useState({});
+
   const mutation = useMutation({
     mutationFn: (data) => {
       if (initialData?.id) return apiClient.put(`/accounts/${initialData.id}`, data);
@@ -72,33 +74,26 @@ export default function AccountForm({ onSuccess, onCancel, initialData }) {
   });
 
   const validateForm = () => {
-    if (!form.account_name?.trim()) {
-      alert('Account Name is required');
-      return false;
-    }
-
+    const e = {};
+    if (!form.account_name?.trim()) e.account_name = 'Account Name is required';
     if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-      alert('Please enter a valid email address');
-      return false;
+      e.email = 'Invalid email address';
     }
-
-    return true;
+    
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     if (!validateForm()) return;
 
     try {
       await mutation.mutateAsync(form);
+      alert('Account saved successfully!');
     } catch (error) {
       console.error(error);
-
-      alert(
-        error?.response?.data?.message ||
-        'Failed to save account'
-      );
+      alert(error?.response?.data?.message || 'Failed to save account');
     }
   };
 
@@ -107,7 +102,8 @@ export default function AccountForm({ onSuccess, onCancel, initialData }) {
     setForm(p => ({ ...p, [name]: type === 'checkbox' ? checked : value }));
   };
 
-  const inputClass = "w-full bg-white text-black border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[13px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all";
+  const inputClass = "w-full bg-white text-black border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[13px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all placeholder:text-gray-400";
+  const errorInputClass = "border-red-400 focus:border-red-500 focus:ring-red-100";
 
   const tabs = [
     { id: 'profile', label: 'Profile' },
@@ -146,8 +142,8 @@ export default function AccountForm({ onSuccess, onCancel, initialData }) {
         {activeTab === 'profile' && (
           <form onSubmit={handleSubmit} className="space-y-1">
             <div className="grid grid-cols-1 gap-1">
-              <FormField label="Account Name">
-                <input name="account_name" value={form.account_name} onChange={handleChange} className={inputClass} required />
+              <FormField label="Account Name" error={errors.account_name}>
+                <input name="account_name" value={form.account_name} onChange={handleChange} className={`${inputClass} ${errors.account_name ? 'border-red-400' : ''}`} />
               </FormField>
 
               <div className="grid grid-cols-2 gap-4">
@@ -182,8 +178,8 @@ export default function AccountForm({ onSuccess, onCancel, initialData }) {
               </FormField>
 
               <div className="grid grid-cols-2 gap-4">
-                <FormField label="Email">
-                  <input name="email" type="email" value={form.email} onChange={handleChange} className={inputClass} />
+                <FormField label="Email" error={errors.email}>
+                  <input name="email" type="email" value={form.email} onChange={handleChange} className={`${inputClass} ${errors.email ? 'border-red-400' : ''}`} />
                 </FormField>
                 <FormField label="Phone">
                   <input name="phone" value={form.phone} onChange={handleChange} className={inputClass} />

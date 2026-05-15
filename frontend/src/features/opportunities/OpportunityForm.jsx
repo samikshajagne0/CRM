@@ -4,13 +4,14 @@ import apiClient from '../../lib/apiClient';
 import Button from '../../components/ui/Button';
 import ActivityTimeline from '../activities/ActivityTimeline';
 
-function FormField({ label, children }) {
+function FormField({ label, children, error }) {
   return (
     <div className="mb-4">
       <label className="block text-[12px] font-medium text-[var(--color-text-secondary)] mb-1.5 uppercase tracking-wider">
         {label}
       </label>
       {children}
+      {error && <div className="text-[10px] font-medium text-red-500 mt-1 animate-fade-in">{error}</div>}
     </div>
   );
 }
@@ -76,6 +77,8 @@ export default function OpportunityForm({ onSuccess, onCancel, initialData }) {
     queryFn: async () => (await apiClient.get('/users')).data
   });
 
+  const [errors, setErrors] = useState({});
+
   const mutation = useMutation({
     mutationFn: (data) => {
       if (initialData?.id) {
@@ -86,25 +89,25 @@ export default function OpportunityForm({ onSuccess, onCancel, initialData }) {
   });
 
   const validateForm = () => {
-    if (!form.opportunity_name?.trim()) return 'Opportunity Name is required.';
-    if (!form.account_id) return 'Please select an Account.';
-    if (!form.owner_id) return 'Please select an Owner.';
-    if (!form.expected_close) return 'Expected Close date is required.';
+    const e = {};
+    if (!form.opportunity_name?.trim()) e.opportunity_name = 'Opportunity Name is required';
+    if (!form.account_id) e.account_id = 'Please select an Account';
+    if (!form.owner_id) e.owner_id = 'Please select an Owner';
+    if (!form.expected_close) e.expected_close = 'Expected Close date is required';
     
     const val = parseFloat(form.value);
-    if (form.value && (isNaN(val) || val < 0)) return 'Value must be a positive number.';
+    if (form.value && (isNaN(val) || val < 0)) e.value = 'Must be a positive number';
     
     const prob = parseInt(form.probability);
-    if (isNaN(prob) || prob < 0 || prob > 100) return 'Probability must be between 0 and 100.';
+    if (isNaN(prob) || prob < 0 || prob > 100) e.probability = 'Between 0 and 100';
     
-    return null;
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    const error = validateForm();
-    if (error) return alert(error);
+    if (!validateForm()) return;
 
     try {
       await mutation.mutateAsync(form);
@@ -133,7 +136,8 @@ export default function OpportunityForm({ onSuccess, onCancel, initialData }) {
     });
   };
 
-  const inputClass = "w-full bg-white text-black border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[13px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all";
+  const inputClass = "w-full bg-white text-black border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[13px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all placeholder:text-gray-400";
+  const errorInputClass = "border-red-400 focus:border-red-500 focus:ring-red-100";
 
   const tabs = [
     { id: 'profile', label: 'Profile' },
@@ -167,20 +171,19 @@ export default function OpportunityForm({ onSuccess, onCancel, initialData }) {
         {activeTab === 'profile' && (
           <form onSubmit={handleSubmit} className="space-y-1">
             <div className="grid grid-cols-1 gap-1">
-        <FormField label="Opportunity Name">
+        <FormField label="Opportunity Name" error={errors.opportunity_name}>
           <input
             name="opportunity_name"
             value={form.opportunity_name}
             onChange={handleChange}
             placeholder="e.g. 500 Licenses for Acme"
-            className={inputClass}
-            required
+            className={`${inputClass} ${errors.opportunity_name ? errorInputClass : ''}`}
           />
         </FormField>
 
         <div className="grid grid-cols-2 gap-4">
-          <FormField label="Account">
-            <select name="account_id" value={form.account_id} onChange={handleChange} className={inputClass} required>
+          <FormField label="Account" error={errors.account_id}>
+            <select name="account_id" value={form.account_id} onChange={handleChange} className={`${inputClass} ${errors.account_id ? errorInputClass : ''}`}>
               <option value="">Select Account</option>
               {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.account_name}</option>)}
             </select>
@@ -196,8 +199,8 @@ export default function OpportunityForm({ onSuccess, onCancel, initialData }) {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <FormField label="Value">
-            <input type="number" name="value" value={form.value} onChange={handleChange} className={inputClass} />
+          <FormField label="Value" error={errors.value}>
+            <input type="number" name="value" value={form.value} onChange={handleChange} className={`${inputClass} ${errors.value ? errorInputClass : ''}`} />
           </FormField>
           <FormField label="Currency">
             <select name="currency" value={form.currency} onChange={handleChange} className={inputClass}>
@@ -212,14 +215,14 @@ export default function OpportunityForm({ onSuccess, onCancel, initialData }) {
               {stages.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
             </select>
           </FormField>
-          <FormField label="Probability (%)">
-            <input type="number" name="probability" value={form.probability} onChange={handleChange} className={inputClass} />
+          <FormField label="Probability (%)" error={errors.probability}>
+            <input type="number" name="probability" value={form.probability} onChange={handleChange} className={`${inputClass} ${errors.probability ? errorInputClass : ''}`} />
           </FormField>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <FormField label="Expected Close">
-            <input type="date" name="expected_close" value={form.expected_close} onChange={handleChange} className={inputClass} />
+          <FormField label="Expected Close" error={errors.expected_close}>
+            <input type="date" name="expected_close" value={form.expected_close} onChange={handleChange} className={`${inputClass} ${errors.expected_close ? errorInputClass : ''}`} />
           </FormField>
           <FormField label="Lead Source">
             <select name="source" value={form.source} onChange={handleChange} className={inputClass}>
@@ -228,8 +231,8 @@ export default function OpportunityForm({ onSuccess, onCancel, initialData }) {
           </FormField>
         </div>
 
-        <FormField label="Owner">
-          <select name="owner_id" value={form.owner_id} onChange={handleChange} className={inputClass} required>
+        <FormField label="Owner" error={errors.owner_id}>
+          <select name="owner_id" value={form.owner_id} onChange={handleChange} className={`${inputClass} ${errors.owner_id ? errorInputClass : ''}`}>
             <option value="">Select Owner</option>
             {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>

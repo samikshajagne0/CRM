@@ -10,7 +10,7 @@ function FormField({ label, children, error }) {
         {label}
       </label>
       {children}
-      {error && <div className="text-[10px] font-medium text-red-500 mt-1 animate-in fade-in slide-in-from-top-1">{error}</div>}
+      {error && <div className="text-[10px] font-medium text-red-500 mt-1 animate-fade-in">{error}</div>}
     </div>
   );
 }
@@ -97,17 +97,18 @@ export default function ContactForm({ onSuccess, onCancel, initialData }) {
     setForm(p => ({ ...p, [name]: type === 'checkbox' ? checked : value }));
   };
 
-  const inputClass = "w-full bg-white text-black border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[13px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all";
+  const inputClass = "w-full bg-white text-black border border-[var(--color-border)] rounded-xl px-4 py-2.5 text-[13px] outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all placeholder:text-gray-400";
+  const errorInputClass = "border-red-400 focus:border-red-500 focus:ring-red-100";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-1">
       <div className="grid grid-cols-1 gap-1">
         <div className="grid grid-cols-2 gap-4">
           <FormField label="First Name" error={errors.first_name}>
-            <input name="first_name" value={form.first_name} onChange={handleChange} className={`${inputClass} ${errors.first_name ? 'border-red-400' : ''}`} />
+            <input name="first_name" value={form.first_name} onChange={handleChange} className={`${inputClass} ${errors.first_name ? errorInputClass : ''}`} />
           </FormField>
           <FormField label="Last Name" error={errors.last_name}>
-            <input name="last_name" value={form.last_name} onChange={handleChange} className={`${inputClass} ${errors.last_name ? 'border-red-400' : ''}`} />
+            <input name="last_name" value={form.last_name} onChange={handleChange} className={`${inputClass} ${errors.last_name ? errorInputClass : ''}`} />
           </FormField>
         </div>
 
@@ -121,7 +122,7 @@ export default function ContactForm({ onSuccess, onCancel, initialData }) {
         </div>
 
         <FormField label="Account" error={errors.account_id}>
-          <select name="account_id" value={form.account_id} onChange={handleChange} className={`${inputClass} ${errors.account_id ? 'border-red-400' : ''}`}>
+          <select name="account_id" value={form.account_id} onChange={handleChange} className={`${inputClass} ${errors.account_id ? errorInputClass : ''}`}>
             <option value="">Select Account</option>
             {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.account_name}</option>)}
           </select>
@@ -129,7 +130,7 @@ export default function ContactForm({ onSuccess, onCancel, initialData }) {
 
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Email" error={errors.email}>
-            <input name="email" value={form.email} onChange={handleChange} className={`${inputClass} ${errors.email ? 'border-red-400' : ''}`} />
+            <input name="email" value={form.email} onChange={handleChange} className={`${inputClass} ${errors.email ? errorInputClass : ''}`} />
           </FormField>
           <FormField label="Mobile">
             <input name="mobile" value={form.mobile} onChange={handleChange} className={inputClass} />
@@ -141,7 +142,7 @@ export default function ContactForm({ onSuccess, onCancel, initialData }) {
             <input name="linkedin" value={form.linkedin} onChange={handleChange} placeholder="linkedin.com/in/..." className={inputClass} />
           </FormField>
           <FormField label="Last Contact Date" error={errors.last_contact}>
-            <input name="last_contact" type="date" value={form.last_contact} onChange={handleChange} className={`${inputClass} ${errors.last_contact ? 'border-red-400' : ''}`} />
+            <input name="last_contact" type="date" value={form.last_contact} onChange={handleChange} className={`${inputClass} ${errors.last_contact ? errorInputClass : ''}`} />
           </FormField>
         </div>
 
